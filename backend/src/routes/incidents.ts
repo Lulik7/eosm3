@@ -1,7 +1,3 @@
-/**
- * Маршруты для работы с инцидентами Service Desk
- */
-
 import express from 'express';
 import {
   getIncidents,
@@ -13,7 +9,7 @@ import {
   deleteIncident,
   getIncidentsStats
 } from '@/controllers/incidentController';
-import { authenticate, requireSupport, requireAdmin} from '../middleware/auth';
+import { authenticate, requireSupport, requireAdmin } from '../middleware/auth';
 import { validateIncident, validateIncidentStatus, validateUpdate } from '@/validators/incidentValidator';
 
 const router = express.Router();
@@ -27,11 +23,11 @@ router.get('/:id', getIncidentById);
 router.post('/', requireSupport, validateIncident, createIncident);
 router.put('/:id', requireSupport, validateUpdate, updateIncident);
 
-// ИСПРАВЛЕНО: убрали requireEngineer — support уже достаточно
-router.patch('/:id/status', requireSupport, validateIncidentStatus, changeIncidentStatus);
+// Без ограничения по роли — support и engineer могут менять статус
+router.patch('/:id/status', validateIncidentStatus, changeIncidentStatus);
 
-// ИСПРАВЛЕНО: убрали requireEngineer — support уже достаточно
-router.post('/:id/updates', requireSupport, addUpdate);
+// Без ограничения по роли — support и engineer могут добавлять обновления
+router.post('/:id/updates', addUpdate);
 
 router.delete('/:id', requireAdmin, deleteIncident);
 

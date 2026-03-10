@@ -24,7 +24,6 @@ const RoleRedirect = ({ user }: { user: User }) => {
 }
 
 function App() {
-
     const [user, setUser] = useState<User | null>(null)
     const [loading, setLoading] = useState(true)
 
@@ -32,7 +31,6 @@ function App() {
         const checkSession = async () => {
             try {
                 const res = await api.get('/auth/me')
-                // ИСПРАВЛЕНО: бэкенд возвращает { data: { user: {...} } }
                 const userData = res.data?.data?.user || res.data?.user || res.data
                 setUser(userData)
             } catch (error) {
@@ -47,7 +45,6 @@ function App() {
     const onLoginSuccess = async () => {
         try {
             const res = await api.get('/auth/me')
-            // ИСПРАВЛЕНО: тот же путь к данным
             const userData = res.data?.data?.user || res.data?.user || res.data
             setUser(userData)
         } catch (error) {
@@ -65,73 +62,48 @@ function App() {
         }
     }
 
-    if (loading) {
-        return <div style={{ padding: 40 }}>Loading...</div>
-    }
+    if (loading) return <div style={{ padding: 40 }}>Loading...</div>
+
+    // Проверка: залогинен ли пользователь (любая роль)
+    const isAuth = Boolean(user)
+    // Проверка: admin может заходить на все страницы
+    const isAdmin = user?.role === 'admin'
 
     return (
         <BrowserRouter>
             <Routes>
 
-                {/* LOGIN */}
-                <Route
-                    path="/login"
-                    element={
-                        user
-                            ? <RoleRedirect user={user} />
-                            : <LoginPage onLoginSuccess={onLoginSuccess} />
-                    }
-                />
+                <Route path="/login" element={
+                    user ? <RoleRedirect user={user} /> : <LoginPage onLoginSuccess={onLoginSuccess} />
+                } />
 
-                {/* ROOT */}
-                <Route
-                    path="/"
-                    element={
-                        user
-                            ? <RoleRedirect user={user} />
-                            : <Navigate to="/login" />
-                    }
-                />
+                <Route path="/" element={
+                    user ? <RoleRedirect user={user} /> : <Navigate to="/login" />
+                } />
 
-                {/* USER */}
-                <Route
-                    path="/user"
-                    element={
-                        user?.role === 'user'
-                            ? <UserPage logout={logout} />
-                            : <Navigate to="/login" />
-                    }
-                />
+                <Route path="/user" element={
+                    user?.role === 'user' || isAdmin
+                        ? <UserPage logout={logout} />
+                        : <Navigate to="/login" />
+                } />
 
-                {/* SUPPORT */}
-                <Route
-                    path="/support"
-                    element={
-                        user?.role === 'support'
-                            ? <SupportPage logout={logout} />
-                            : <Navigate to="/login" />
-                    }
-                />
+                <Route path="/support" element={
+                    user?.role === 'support' || isAdmin
+                        ? <SupportPage logout={logout} />
+                        : <Navigate to="/login" />
+                } />
 
-                {/* ENGINEER */}
-                <Route
-                    path="/engineer"
-                    element={
-                        user?.role === 'engineer'
-                            ? <EngineerPage logout={logout} />
-                            : <Navigate to="/login" />
-                    }
-                />
+                <Route path="/engineer" element={
+                    user?.role === 'engineer' || isAdmin
+                        ? <EngineerPage logout={logout} />
+                        : <Navigate to="/login" />
+                } />
 
-                {/* ADMIN */}
-                <Route
-                    path="/admin"
-                    element={
-                        user?.role === 'admin'
-                            ? <AdminPage logout={logout} />
-                            : <Navigate to="/login" />
-                    }
-                />
+                <Route path="/admin" element={
+                    user?.role === 'admin'
+                        ? <AdminPage logout={logout} />
+                        : <Navigate to="/login" />
+                } />
 
                 <Route path="*" element={<Navigate to="/login" />} />
 

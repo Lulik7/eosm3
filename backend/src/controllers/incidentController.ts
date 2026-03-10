@@ -33,8 +33,8 @@ export const getIncidents = async (req: Request, res: Response): Promise<void> =
     const query = req.query
     const user = (req as any).user
     let roleFilter: any = {}
+    // user видит только свои, все остальные роли (support, engineer, admin) видят все
     if (user.role === 'user') roleFilter.createdBy = user._id
-    if (user.role === 'engineer') roleFilter.assignedTo = user._id
     const baseFilter = buildFilter(query, ['status', 'severity', 'type', 'assignedTo', 'createdBy'])
     const filter = { ...baseFilter, ...roleFilter }
     const filterWithSearch = addTextSearch(filter, query['search'] as string, ['title', 'description', 'incidentNumber'])
@@ -155,7 +155,6 @@ export const changeIncidentStatus = async (req: Request, res: Response): Promise
     if (!validateEnum(status, ['new', 'investigating', 'identified', 'monitoring', 'resolved', 'closed'], res, 'статус')) return
     const incident = await IncidentModel.findById(req.params['id'])
     if (!incident) return sendNotFound(res, 'Инцидент')
-    if (!isSupportOrAdmin((req as any).user)) return sendForbidden(res, 'Недостаточно прав')
     await incident.changeStatus(status, (req as any).user._id, comment)
     await incident.populate('statusHistory.changedBy', 'username')
     return sendSuccess(res, incident, 'Статус изменен')
@@ -170,7 +169,6 @@ export const addUpdate = async (req: Request, res: Response): Promise<void> => {
     if (!validateRequiredField(req.body, 'message', res)) return
     const incident = await IncidentModel.findById(req.params['id'])
     if (!incident) return sendNotFound(res, 'Инцидент')
-    if (!isSupportOrAdmin((req as any).user)) return sendForbidden(res, 'Недостаточно прав')
     await incident.addUpdate(message, (req as any).user._id, isPublic)
     await incident.populate('updates.author', 'username')
     const newUpdate = incident.updates[incident.updates.length - 1]
