@@ -1,0 +1,33 @@
+//{
+//  "compilerOptions": {
+//    "target": "ES6",
+//    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+//    "moduleResolution": "node",
+//    "skipLibCheck": true,
+//    "jsx": "react-jsx",
+//    //чтоб не ругался на import React from 'react';
+//    "allowSyntheticDefaultImports": true,
+//    "esModuleInterop": true
+//  }
+//}
+
+
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "node",
+
+    "strict": true,
+    "skipLibCheck": true,
+
+    "jsx": "react-jsx",
+
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"]
+}
