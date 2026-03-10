@@ -4,7 +4,7 @@
 //
 
 
-import mongoose, { Document } from 'mongoose';
+import { Document } from 'mongoose';
 import { Session as ExpressSession } from 'express-session';
 
 

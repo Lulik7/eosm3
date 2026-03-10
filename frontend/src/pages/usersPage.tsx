@@ -1,6 +1,5 @@
-
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Container, Box, Typography, Paper, TextField,
     Button, Stack, Grid, Divider, Chip,
@@ -32,74 +31,70 @@ import {
 } from '@mui/icons-material';
 import { TransitionGroup } from 'react-transition-group';
 import { useNavigate } from 'react-router-dom';
+import api from '../api/axios';
 
-// 1. Описываем интерфейс пропсов
 interface UserPageProps {
     logout: () => Promise<void>;
 }
 
-// 2. Оставляем ТОЛЬКО ОДНО объявление компонента
 const UserPage: React.FC<UserPageProps> = ({ logout }) => {
     const navigate = useNavigate();
     const [ticketText, setTicketText] = useState('');
     const [subject, setSubject] = useState('');
     const [incidentType, setIncidentType] = useState('Other');
     const [showArchive, setShowArchive] = useState(false);
+    const [tickets, setTickets] = useState<any[]>([]);
 
-    const [profile, setProfile] = useState({
-        name: 'My Cabinet',
-        address: 'Baker St. 221B',
-        phone: '+1 234 567 890'
-    });
+    const [profile, setProfile] = useState({ name: 'My Cabinet', address: 'Baker St. 221B', phone: '+1 234 567 890' });
     const [tempProfile, setTempProfile] = useState({ ...profile });
     const [selectedAvatar, setSelectedAvatar] = useState<React.ReactNode>(<PersonIcon />);
     const [openAvatarDialog, setOpenAvatarDialog] = useState(false);
     const [openEditDialog, setOpenEditDialog] = useState(false);
+    const [selectedMail, setSelectedMail] = useState<{ title: string; message: string } | null>(null);
 
-    const [tickets, setTickets] = useState(() => {
-        const saved = localStorage.getItem('city_tickets');
-        return saved ? JSON.parse(saved) : [
-            { id: 1, title: 'Utility issue', status: 'Open', date: '2026-02-20', archived: false, type: 'Water Leak' },
-            { id: 2, title: 'Parking permit', status: 'Closed', date: '2025-12-10', archived: true, type: 'Other' },
-            { id: 3, title: 'Internet connection', status: 'In Progress', date: '2026-02-25', archived: false, type: 'Other' },
-            { id: 4, title: 'Elevator maintenance', status: 'Closed', date: '2026-01-15', archived: true, type: 'Elevator Issue' },
-            { id: 5, title: 'Leaky faucet', status: 'Open', date: '2026-02-27', archived: false, type: 'Water Leak' },
-        ];
-    });
+    const fetchTickets = async () => {
+        try {
+            const res = await api.get('/tickets');
+            const result = res.data?.data || res.data;
+            setTickets(Array.isArray(result) ? result : []);
+        } catch (error) {
+            console.error('Ошибка загрузки тикетов:', error);
+        }
+    };
 
-    const handleSendTicket = () => {
+    useEffect(() => { fetchTickets(); }, []);
+
+    const handleSendTicket = async () => {
         if (!ticketText || !subject) return;
-        const newTicket = {
-            id: Date.now().toString(), title: subject, user: "Current User", type: incidentType,
-            status: 'Incoming', date: new Date().toISOString().split('T')[0], archived: false
-        };
-        const updatedTickets = [newTicket, ...tickets];
-        setTickets(updatedTickets);
-        localStorage.setItem('city_tickets', JSON.stringify(updatedTickets));
-        setTicketText(''); setSubject(''); setIncidentType('Other');
+        console.log('Sending POST with:', { title: subject, description: ticketText, type: incidentType });
+        try {
+            const res = await api.post('/tickets', {
+                title: subject,
+                description: ticketText,
+                type: incidentType
+            });
+            console.log('POST response:', res.data);
+            setTicketText('');
+            setSubject('');
+            setIncidentType('Other');
+            await fetchTickets();
+        } catch (error: any) {
+            console.error('POST error:', error?.response?.data || error?.message || error);
+        }
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Open': case 'Incoming': return '#f5a623';
-            case 'In Progress': return '#2b4d7e';
-            case 'Closed': return '#9e9e9e';
+            case 'Open': case 'Incoming': case 'new': return '#f5a623';
+            case 'In Progress': case 'in-progress': return '#2b4d7e';
+            case 'Closed': case 'closed': case 'resolved': return '#9e9e9e';
             default: return '#eee';
         }
     };
 
-    // Функция выхода
-    const handleExitClick = async () => {
-        await logout();
-        navigate('/login');
-    };
-
-
-
-    const [selectedMail, setSelectedMail] = useState<{ title: string; message: string } | null>(null);
+    const handleExitClick = async () => { await logout(); navigate('/login'); };
     const handleOpenMail = (title: string, message: string) => setSelectedMail({ title, message });
 
-  
     const mailScrollStyle = {
         flexGrow: 1, maxHeight: '280px', overflowY: 'auto', pr: 1,
         '&::-webkit-scrollbar': { width: '4px' },
@@ -135,6 +130,7 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                 <Grid item sx={{ flexGrow: 1, py: 4, px: { md: 2, lg: 4 }, display: 'flex', flexDirection: 'column' }}>
                     <Container maxWidth="lg" disableGutters sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
 
+                        {/* HEADER */}
                         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
                             <Stack direction="row" spacing={2} alignItems="center">
                                 <Avatar onClick={() => setOpenAvatarDialog(true)} sx={{ bgcolor: '#2b4d7e', width: 64, height: 64, border: '3px solid white', cursor: 'pointer', boxShadow: 3 }}>
@@ -148,29 +144,32 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                                         </IconButton>
                                     </Stack>
                                     <Stack spacing={0.2}>
-                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#2b4d7e', opacity: 0.8 }}><LocationIcon sx={{ fontSize: 14 }} /><Typography variant="caption" fontWeight="bold">{profile.address}</Typography></Stack>
-                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#2b4d7e', opacity: 0.8 }}><PhoneIcon sx={{ fontSize: 14 }} /><Typography variant="caption" fontWeight="bold">{profile.phone}</Typography></Stack>
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#2b4d7e', opacity: 0.8 }}>
+                                            <LocationIcon sx={{ fontSize: 14 }} />
+                                            <Typography variant="caption" fontWeight="bold">{profile.address}</Typography>
+                                        </Stack>
+                                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color: '#2b4d7e', opacity: 0.8 }}>
+                                            <PhoneIcon sx={{ fontSize: 14 }} />
+                                            <Typography variant="caption" fontWeight="bold">{profile.phone}</Typography>
+                                        </Stack>
                                     </Stack>
                                 </Box>
                             </Stack>
-
                             <Stack direction="row" spacing={1.5} sx={{ pt: 1, ml: 'auto', mr: 2 }}>
                                 <Button variant="outlined" startIcon={<HomeIcon />} onClick={() => navigate('/')} sx={{ borderRadius: 0, color: '#2b4d7e', borderColor: '#2b4d7e', fontWeight: 'bold', px: 2, height: '40px' }}>HOME</Button>
-                                <Button
-                                    variant="contained"
-                                    startIcon={<ExitIcon />}
-                                    onClick={handleExitClick}
-                                    sx={{ borderRadius: 0, bgcolor: '#2b4d7e', fontWeight: 'bold', px: 2, height: '40px' }}
-                                >
-                                    EXIT
-                                </Button>
+                                <Button variant="contained" startIcon={<ExitIcon />} onClick={handleExitClick} sx={{ borderRadius: 0, bgcolor: '#2b4d7e', fontWeight: 'bold', px: 2, height: '40px' }}>EXIT</Button>
                             </Stack>
                         </Stack>
 
+                        {/* MAIN GRID */}
                         <Grid container spacing={3} justifyContent="space-between" sx={{ mb: 2 }}>
+
+                            {/* MAIL */}
                             <Grid item xs={12} md={3.5}>
                                 <Paper elevation={10} sx={{ p: 4, borderRadius: 0, bgcolor: '#2b4d7e', color: 'white', display: 'flex', flexDirection: 'column' }}>
-                                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}><EmailIcon /><Typography variant="h5" sx={{ fontWeight: 700 }}>YOUR MAIL</Typography></Stack>
+                                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                                        <EmailIcon /><Typography variant="h5" sx={{ fontWeight: 700 }}>YOUR MAIL</Typography>
+                                    </Stack>
                                     <Box sx={mailScrollStyle}>
                                         <List disablePadding>
                                             {[
@@ -197,6 +196,7 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                                 </Paper>
                             </Grid>
 
+                            {/* TICKETS */}
                             <Grid item xs={12} md={4}>
                                 <Box>
                                     <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mb: 2 }}>
@@ -205,22 +205,30 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                                     </Stack>
                                     <Box sx={ticketScrollStyle}>
                                         <TransitionGroup>
-                                            {tickets.filter(t => (showArchive ? true : !t.archived)).map((ticket: any) => (
-                                                <Collapse key={ticket.id} sx={{ mb: 2 }}>
-                                                    <Paper elevation={3} sx={{ p: 2, borderRadius: 0, borderLeft: `4px solid ${getStatusColor(ticket.status)}` }}>
-                                                        <Typography fontWeight="bold" variant="body2">{ticket.title}</Typography>
-                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                                                            <Typography variant="caption">{ticket.date}</Typography>
-                                                            <Chip label={ticket.status} size="small" sx={{ borderRadius: 0, bgcolor: getStatusColor(ticket.status), color: 'white' }} />
-                                                        </Box>
-                                                    </Paper>
-                                                </Collapse>
-                                            ))}
+                                            {tickets
+                                                .filter((t: any) => showArchive ? true : !t.archived)
+                                                .map((ticket: any) => (
+                                                    <Collapse key={ticket._id || ticket.id} sx={{ mb: 2 }}>
+                                                        <Paper elevation={3} sx={{ p: 2, borderRadius: 0, borderLeft: `4px solid ${getStatusColor(ticket.status)}` }}>
+                                                            <Typography fontWeight="bold" variant="body2">{ticket.title}</Typography>
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                                                                <Typography variant="caption">
+                                                                    {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ticket.date}
+                                                                </Typography>
+                                                                <Chip label={ticket.status} size="small" sx={{ borderRadius: 0, bgcolor: getStatusColor(ticket.status), color: 'white' }} />
+                                                            </Box>
+                                                        </Paper>
+                                                    </Collapse>
+                                                ))}
                                         </TransitionGroup>
+                                        {tickets.length === 0 && (
+                                            <Typography variant="body2" sx={{ color: '#aaa', textAlign: 'center', mt: 4 }}>No requests yet</Typography>
+                                        )}
                                     </Box>
                                 </Box>
                             </Grid>
 
+                            {/* CREATE TICKET */}
                             <Grid item xs={12} md={4}>
                                 <Paper elevation={10} sx={{ p: 4, borderRadius: 0, borderTop: '5px solid #2b4d7e' }}>
                                     <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: '#2b4d7e' }}>CREATE TICKET</Typography>
@@ -231,6 +239,13 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                                             <Select value={incidentType} label="Type" onChange={(e) => setIncidentType(e.target.value)} sx={{ borderRadius: 0 }}>
                                                 <MenuItem value="Water Leak">Water Leak</MenuItem>
                                                 <MenuItem value="Power Failure">Power Failure</MenuItem>
+                                                <MenuItem value="Elevator Issue">Elevator Issue</MenuItem>
+                                                <MenuItem value="Gas Leak">Gas Leak</MenuItem>
+                                                <MenuItem value="Heating Problem">Heating Problem</MenuItem>
+                                                <MenuItem value="Sewage Issue">Sewage Issue</MenuItem>
+                                                <MenuItem value="Road Damage">Road Damage</MenuItem>
+                                                <MenuItem value="Street Light">Street Light</MenuItem>
+                                                <MenuItem value="Noise Complaint">Noise Complaint</MenuItem>
                                                 <MenuItem value="Other">Other</MenuItem>
                                             </Select>
                                         </FormControl>
@@ -241,9 +256,15 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                             </Grid>
                         </Grid>
 
+                        {/* BOTTOM ICONS */}
                         <Box sx={{ mt: 'auto', pt: 10, pb: 4, display: 'flex', justifyContent: 'center', width: '100%' }}>
                             <Stack direction="row" spacing={8} alignItems="center">
-                                {[{ i: <ConstructionIcon />, t: 'Construction' }, { i: <PlumbingIcon />, t: 'Plumbing' }, { i: <VehiclesIcon />, t: 'Vehicles' }, { i: <UtilitiesIcon />, t: 'Utilities' }].map((item, idx) => (
+                                {[
+                                    { i: <ConstructionIcon />, t: 'Construction' },
+                                    { i: <PlumbingIcon />, t: 'Plumbing' },
+                                    { i: <VehiclesIcon />, t: 'Vehicles' },
+                                    { i: <UtilitiesIcon />, t: 'Utilities' }
+                                ].map((item, idx) => (
                                     <Stack key={idx} alignItems="center" spacing={1}>
                                         <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: 'white', boxShadow: 1, border: '1px solid rgba(43, 77, 126, 0.05)', display: 'flex' }}>
                                             {React.isValidElement(item.i) ? React.cloneElement(item.i as React.ReactElement<any>, { sx: { fontSize: 22, color: '#2b4d7e' } }) : item.i}
@@ -256,12 +277,12 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                     </Container>
                 </Grid>
 
-                <Grid item sx={{ width: '220px', display: 'flex' }}>
+                {/* SIDEBAR — ИСПРАВЛЕНО: скрыт на мобильном */}
+                <Grid item sx={{ width: '220px', display: { xs: 'none', md: 'flex' } }}>
                     <Box sx={{
                         flexGrow: 1,
                         bgcolor: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(10px)',
-                        borderLeft: '1px solid rgba(43, 77, 126, 0.1)', p: 2,
-                        overflowY: 'auto'
+                        borderLeft: '1px solid rgba(43, 77, 126, 0.1)', p: 2, overflowY: 'auto'
                     }}>
                         <Typography variant="subtitle2" sx={{ color: '#2b4d7e', fontWeight: 900, mb: 3, borderBottom: '2px solid #f5a623', pb: 1, letterSpacing: 0.5, mt: 1 }}>
                             CITY DIRECTORY
@@ -282,7 +303,9 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                                     <ListItemIcon sx={{ minWidth: 30, color: '#2b4d7e' }}>
                                         {React.isValidElement(item.i) ? React.cloneElement(item.i as React.ReactElement<any>, { sx: { fontSize: 18 } }) : item.i}
                                     </ListItemIcon>
-                                    <ListItemText primary={item.t} secondary={item.s} primaryTypographyProps={{ fontWeight: 800, fontSize: '0.75rem', color: '#2b4d7e' }} secondaryTypographyProps={{ fontSize: '0.6rem' }} />
+                                    <ListItemText primary={item.t} secondary={item.s}
+                                                  primaryTypographyProps={{ fontWeight: 800, fontSize: '0.75rem', color: '#2b4d7e' }}
+                                                  secondaryTypographyProps={{ fontSize: '0.6rem' }} />
                                 </ListItem>
                             ))}
                         </List>
@@ -290,21 +313,9 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                 </Grid>
             </Grid>
 
-            <Box sx={{
-                bgcolor: '#2b4d7e',
-                height: '60px',
-                display: 'flex',
-                alignItems: 'center',
-                overflow: 'hidden',
-                borderTop: '2px solid #f5a623',
-                position: 'relative'
-            }}>
-                <Box sx={{
-                    display: 'flex',
-                    whiteSpace: 'nowrap',
-                    animation: 'marquee 45s linear infinite',
-                    '&:hover': { animationPlayState: 'paused' }
-                }}>
+            {/* MARQUEE */}
+            <Box sx={{ bgcolor: '#2b4d7e', height: '60px', display: 'flex', alignItems: 'center', overflow: 'hidden', borderTop: '2px solid #f5a623', position: 'relative' }}>
+                <Box sx={{ display: 'flex', whiteSpace: 'nowrap', animation: 'marquee 45s linear infinite', '&:hover': { animationPlayState: 'paused' } }}>
                     {[1, 2].map((group) => (
                         <Stack key={group} direction="row" spacing={10} alignItems="center" sx={{ color: 'white', px: 2 }}>
                             {[
@@ -326,6 +337,7 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                 </Box>
             </Box>
 
+            {/* FOOTER */}
             <Box sx={{ bgcolor: '#1a2a40', py: 4, color: 'white' }}>
                 <Container maxWidth="xl">
                     <Typography variant="body2" align="center" sx={{ opacity: 0.6 }}>
@@ -334,14 +346,20 @@ const UserPage: React.FC<UserPageProps> = ({ logout }) => {
                 </Container>
             </Box>
 
+            {/* DIALOGS */}
             <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} PaperProps={{ sx: { borderRadius: 0, minWidth: '350px' } }}>
                 <DialogTitle sx={{ color: '#2b4d7e', fontWeight: 800 }}>Edit Profile</DialogTitle>
-                <DialogContent><Stack spacing={3} sx={{ mt: 1 }}>
-                    <TextField fullWidth label="Name" value={tempProfile.name} onChange={(e) => setTempProfile({...tempProfile, name: e.target.value})} variant="standard" />
-                    <TextField fullWidth label="Address" value={tempProfile.address} onChange={(e) => setTempProfile({...tempProfile, address: e.target.value})} variant="standard" />
-                    <TextField fullWidth label="Phone" value={tempProfile.phone} onChange={(e) => setTempProfile({...tempProfile, phone: e.target.value})} variant="standard" />
-                </Stack></DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setOpenEditDialog(false)}>Cancel</Button><Button onClick={() => { setProfile(tempProfile); setOpenEditDialog(false); }} variant="contained" sx={{ bgcolor: '#2b4d7e', borderRadius: 0 }}>Save</Button></DialogActions>
+                <DialogContent>
+                    <Stack spacing={3} sx={{ mt: 1 }}>
+                        <TextField fullWidth label="Name" value={tempProfile.name} onChange={(e) => setTempProfile({...tempProfile, name: e.target.value})} variant="standard" />
+                        <TextField fullWidth label="Address" value={tempProfile.address} onChange={(e) => setTempProfile({...tempProfile, address: e.target.value})} variant="standard" />
+                        <TextField fullWidth label="Phone" value={tempProfile.phone} onChange={(e) => setTempProfile({...tempProfile, phone: e.target.value})} variant="standard" />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ p: 3 }}>
+                    <Button onClick={() => setOpenEditDialog(false)}>Cancel</Button>
+                    <Button onClick={() => { setProfile(tempProfile); setOpenEditDialog(false); }} variant="contained" sx={{ bgcolor: '#2b4d7e', borderRadius: 0 }}>Save</Button>
+                </DialogActions>
             </Dialog>
 
             <Dialog open={openAvatarDialog} onClose={() => setOpenAvatarDialog(false)}>

@@ -1,13 +1,15 @@
-export type TicketStatus = 'new' | 'in-progress' | 'resolved' | 'closed';
+export type TicketStatus = 'new' | 'in-progress' | 'resolved' | 'closed' | 'investigating' | 'monitoring';
 
 export interface Ticket {
     id?: string;
     _id: string;
-    ticketNumber?: string;  // Полезно для поиска (например, TKT-001)
+    ticketNumber?: string;
     title: string;
-    description?: string;   // Описание проблемы
-    user: string;           // ID пользователя (или объект пользователя)
-    type: 'Water Leak' | 'Power Failure' | 'Elevator Issue' | 'Other';
+    description?: string;
+    createdBy?: string | { _id: string; username: string; email: string };
+    user?: string;  // оставляем для обратной совместимости
+    type?: string;
     status: TicketStatus;
-    createdAt: string;      // Дата создания из БД
+    createdAt?: string;
+    incidentCreated?: boolean;
 }

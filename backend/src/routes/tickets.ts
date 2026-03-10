@@ -1,16 +1,19 @@
 import express from 'express';
-// Если у тебя контроллер называется иначе, проверь путь
 import { getTickets, createTicket, updateTicketStatus } from '@/controllers/ticketController';
+import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
 
-// Маршрут для получения всех тикетов
+// Аутентификация для всех роутов тикетов
+router.use(authenticate);
+
+// Получение тикетов (support/admin видят все, user — только свои)
 router.get('/', getTickets);
 
-// Маршрут для создания нового тикета
+// Создание нового тикета
 router.post('/', createTicket);
 
-// Маршрут для обновления статуса (нужен для Drag-and-Drop)
+// Обновление статуса (Drag-and-Drop)
 router.patch('/:id/status', updateTicketStatus);
 
 export default router;

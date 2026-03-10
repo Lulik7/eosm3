@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react"
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
-import api from "./api/axios";
-import LoginPage from "./pages/loginPage";
-import {Dashboard} from "@mui/icons-material";
-import SupportPage from "./pages/supportsPage";
-import EngineerPage from "./pages/engineersPage";
-import AdminPage from "./pages/adminsPage";
-
-
-// import Dashboard from "./pages/Dashboard"
-
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import api from './api/axios'
+import LoginPage from './pages/loginPage'
+import SupportPage from './pages/supportsPage'
+import EngineerPage from './pages/engineersPage'
+import AdminPage from './pages/adminsPage'
+import UserPage from "./pages/usersPage";
 
 interface User {
     _id: string
     username: string
-    role: "user" | "support" | "engineer" | "admin"
+    role: 'user' | 'support' | 'engineer' | 'admin'
+}
+
+const RoleRedirect = ({ user }: { user: User }) => {
+    switch (user.role) {
+        case 'user':      return <Navigate to="/user" />
+        case 'support':   return <Navigate to="/support" />
+        case 'engineer':  return <Navigate to="/engineer" />
+        case 'admin':     return <Navigate to="/admin" />
+        default:          return <Navigate to="/login" />
+    }
 }
 
 function App() {
@@ -23,97 +29,113 @@ function App() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-
         const checkSession = async () => {
-
             try {
-
-                const res = await api.get("/auth/me")
-
-                setUser(res.data)
-
+                const res = await api.get('/auth/me')
+                // ИСПРАВЛЕНО: бэкенд возвращает { data: { user: {...} } }
+                const userData = res.data?.data?.user || res.data?.user || res.data
+                setUser(userData)
             } catch (error) {
-
-                console.log("Session not found or expired")
-
+                console.log('Session not found or expired')
                 setUser(null)
-
             }
-
             setLoading(false)
-
         }
-
         checkSession()
-
     }, [])
 
+    const onLoginSuccess = async () => {
+        try {
+            const res = await api.get('/auth/me')
+            // ИСПРАВЛЕНО: тот же путь к данным
+            const userData = res.data?.data?.user || res.data?.user || res.data
+            setUser(userData)
+        } catch (error) {
+            console.error('Failed to fetch user after login:', error)
+        }
+    }
+
+    const logout = async () => {
+        try {
+            await api.post('/auth/logout')
+        } catch (error) {
+            console.error('Logout error:', error)
+        } finally {
+            setUser(null)
+        }
+    }
+
     if (loading) {
-        return <div style={{padding:40}}>Loading...</div>
+        return <div style={{ padding: 40 }}>Loading...</div>
     }
 
     return (
         <BrowserRouter>
-
             <Routes>
 
                 {/* LOGIN */}
-
                 <Route
                     path="/login"
                     element={
                         user
-                            ? <Navigate to="/" />
-                            : <LoginPage setUser={setUser} />
+                            ? <RoleRedirect user={user} />
+                            : <LoginPage onLoginSuccess={onLoginSuccess} />
                     }
                 />
 
-                {/* DASHBOARD */}
-
+                {/* ROOT */}
                 <Route
                     path="/"
                     element={
                         user
-                            ? <Dashboard user={user} />
+                            ? <RoleRedirect user={user} />
+                            : <Navigate to="/login" />
+                    }
+                />
+
+                {/* USER */}
+                <Route
+                    path="/user"
+                    element={
+                        user?.role === 'user'
+                            ? <UserPage logout={logout} />
                             : <Navigate to="/login" />
                     }
                 />
 
                 {/* SUPPORT */}
-
                 <Route
                     path="/support"
                     element={
-                        user?.role === "support"
-                            ? <SupportPage />
-                            : <Navigate to="/" />
+                        user?.role === 'support'
+                            ? <SupportPage logout={logout} />
+                            : <Navigate to="/login" />
                     }
                 />
 
                 {/* ENGINEER */}
-
                 <Route
                     path="/engineer"
                     element={
-                        user?.role === "engineer"
-                            ? <EngineerPage />
-                            : <Navigate to="/" />
+                        user?.role === 'engineer'
+                            ? <EngineerPage logout={logout} />
+                            : <Navigate to="/login" />
                     }
                 />
 
                 {/* ADMIN */}
-
                 <Route
                     path="/admin"
                     element={
-                        user?.role === "admin"
-                            ? <AdminPage />
-                            : <Navigate to="/" />
+                        user?.role === 'admin'
+                            ? <AdminPage logout={logout} />
+                            : <Navigate to="/login" />
                     }
                 />
 
-            </Routes>
+                <Route path="*" element={<Navigate to="/login" />} />
 
+            </Routes>
         </BrowserRouter>
     )
 }

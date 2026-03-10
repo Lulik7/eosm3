@@ -1,34 +1,39 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-// Описываем интерфейс для Mongoose (как объект выглядит в коде)
-export interface Ticket {
-    _id?: string
-    id?: string
+export interface ITicket extends Document {
+    _id: string
+    ticketNumber: string
     title: string
     description?: string
-    status: "new" | "investigating" | "monitoring" | "resolved" | "closed"
+    createdBy: mongoose.Types.ObjectId
+    type: string
+    status: string
+    incidentCreated?: boolean
+    createdAt: Date
+    updatedAt: Date
 }
 
-// Создаем схему (как данные хранятся в БД)
 const TicketSchema: Schema = new Schema({
     ticketNumber: { type: String, required: true, unique: true },
     title: { type: String, required: true },
     description: { type: String },
 
-    createdBy: { type: String, required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
     type: {
         type: String,
-        enum: ['Water Leak', 'Power Failure', 'Elevator Issue', 'Other'],
-        required: true
+        enum: ['Water Leak', 'Power Failure', 'Elevator Issue', 'Gas Leak', 'Heating Problem', 'Sewage Issue', 'Road Damage', 'Street Light', 'Noise Complaint', 'Other'],
+        default: 'Other'
     },
 
     status: {
         type: String,
-        enum: ['new', 'in-progress', 'resolved', 'closed'],
+        enum: ['new', 'in-progress', 'resolved', 'closed', 'investigating', 'monitoring'],
         default: 'new'
-    }
+    },
+
+    incidentCreated: { type: Boolean, default: false }
 
 }, { timestamps: true });
 
-export const Ticket = mongoose.model<Ticket>('Ticket', TicketSchema);
+export const Ticket = mongoose.model<ITicket>('Ticket', TicketSchema);

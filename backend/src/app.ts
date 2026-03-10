@@ -52,7 +52,7 @@ app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true, // ОБЯЗАТЕЛЬНО для работы с httpOnly cookies
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 }));
 
 
