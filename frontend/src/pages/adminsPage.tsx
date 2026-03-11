@@ -4,7 +4,8 @@ import {
     Chip, Table, TableBody, TableCell, TableContainer, TableHead,
     TableRow, Snackbar, Alert, Fade, MenuItem, Select,
     FormControl, InputLabel, Badge, Menu, Dialog, DialogTitle,
-    DialogContent, List, ListItem, ListItemText, Divider, DialogActions
+    DialogContent, List, ListItem, ListItemText, Divider, DialogActions,
+    Drawer, useMediaQuery, useTheme
 } from '@mui/material';
 import {
     Logout as LogoutIcon,
@@ -17,7 +18,9 @@ import {
     EditNote as EditIcon,
     DeleteOutline as RemoveIcon,
     Engineering as EngineerIcon,
-    SupportAgent as SupportIcon
+    SupportAgent as SupportIcon,
+    Menu as MenuIcon,
+    Close as CloseIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -40,7 +43,6 @@ const steamAnimation = {
     '15%': { opacity: 0.9 },
     '100%': { transform: 'translateY(-80px) scaleX(3)', opacity: 0 },
 };
-
 const floatAnimation = {
     '0%, 100%': { transform: 'translateY(0)' },
     '50%': { transform: 'translateY(-12px)' },
@@ -48,6 +50,9 @@ const floatAnimation = {
 
 const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
     const [isLoading, setIsLoading] = useState(true);
     const [logs, setLogs] = useState<SystemLog[]>([]);
@@ -58,6 +63,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
     const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
     const [tempDetails, setTempDetails] = useState('');
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const openMenu = Boolean(anchorEl);
 
     const primaryMain = '#2b4d7e';
@@ -73,11 +79,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
         try {
             const response = await axios.get('http://localhost:3000/api/incidents?limit=100', { withCredentials: true });
             const result = response.data;
-            const arr = Array.isArray(result) ? result
-                : result?.data || result?.incidents || [];
+            const arr = Array.isArray(result) ? result : result?.data || result?.incidents || [];
             setLogs(arr);
         } catch (error) {
-            console.error("Ошибка загрузки:", error);
+            console.error('Failed to load incidents:', error);
             setLogs([]);
         } finally {
             setTimeout(() => setIsLoading(false), 2000);
@@ -132,10 +137,30 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                     </Box>
                     <Box sx={{ width: 170, height: 16, mt: -1, borderRadius: '50%', background: 'radial-gradient(ellipse at center, #ffffff 0%, #bcbcbc 100%)', boxShadow: '0 12px 25px rgba(0,0,0,0.8)' }} />
                 </Box>
-                <Typography variant="h2" sx={{ mt: 7, color: 'white', letterSpacing: 8 }}>ADMIN'S BREAK</Typography>
+                <Typography variant={isSmall ? 'h4' : 'h2'} sx={{ mt: 7, color: 'white', letterSpacing: isSmall ? 3 : 8, textAlign: 'center' }}>ADMIN'S BREAK</Typography>
             </Box>
         );
     }
+
+    const NavButtons = () => (
+        <>
+            <Button startIcon={<EngineerIcon />} onClick={() => { navigate('/engineer'); setDrawerOpen(false); }} sx={isMobile ? { ...navBtnSx, color: primaryMain, '&:hover': { bgcolor: primaryMain, color: 'white' } } : navBtnSx}>
+                Engineer Page
+            </Button>
+            <Button startIcon={<SupportIcon />} onClick={() => { navigate('/support'); setDrawerOpen(false); }} sx={isMobile ? { ...navBtnSx, color: primaryMain, '&:hover': { bgcolor: primaryMain, color: 'white' } } : navBtnSx}>
+                Support Page
+            </Button>
+            <Divider orientation={isMobile ? 'horizontal' : 'vertical'} flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)', mx: 1 }} />
+            <Button startIcon={<SettingsIcon />} onClick={(e) => { setAnchorEl(e.currentTarget); setDrawerOpen(false); }}
+                    sx={isMobile ? { ...navBtnSx, color: primaryMain, '&:hover': { bgcolor: 'rgba(0,0,0,0.08)' } } : { ...navBtnSx, '&:hover': { bgcolor: 'rgba(255,255,255,0.15)', transform: 'translateY(-1px)' } }}>
+                Settings
+            </Button>
+            <Button variant="contained" startIcon={<LogoutIcon />} onClick={async () => { await logout(); navigate('/login'); setDrawerOpen(false); }}
+                    sx={{ bgcolor: secondaryMain, fontWeight: 'bold', borderRadius: 0, '&:hover': { bgcolor: '#e6951d' } }}>
+                Exit
+            </Button>
+        </>
+    );
 
     return (
         <Fade in={!isLoading} timeout={1000}>
@@ -145,26 +170,18 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                 backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed'
             }}>
                 {/* HEADER */}
-                <Box sx={{ bgcolor: primaryMain, color: 'white', p: 2, px: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `4px solid ${secondaryMain}` }}>
-                    <Typography variant="h6" sx={{ fontWeight: 900, letterSpacing: 1 }}>SYSTEM ROOT</Typography>
+                <Box sx={{ bgcolor: primaryMain, color: 'white', p: 2, px: { xs: 2, md: 4 }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `4px solid ${secondaryMain}` }}>
+                    <Typography variant={isSmall ? 'subtitle1' : 'h6'} sx={{ fontWeight: 900, letterSpacing: 1 }}>SYSTEM ROOT</Typography>
 
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                        <Button startIcon={<EngineerIcon />} onClick={() => navigate('/engineer')} sx={navBtnSx}>
-                            Engineer Page
-                        </Button>
-                        <Button startIcon={<SupportIcon />} onClick={() => navigate('/support')} sx={navBtnSx}>
-                            Support Page
-                        </Button>
-                        <Divider orientation="vertical" flexItem sx={{ bgcolor: 'rgba(255,255,255,0.2)', mx: 1 }} />
-                        <Button startIcon={<SettingsIcon />} onClick={(e) => setAnchorEl(e.currentTarget)}
-                                sx={{ ...navBtnSx, '&:hover': { bgcolor: 'rgba(255,255,255,0.15)', transform: 'translateY(-1px)' } }}>
-                            Settings
-                        </Button>
-                        <Button variant="contained" startIcon={<LogoutIcon />} onClick={async () => { await logout(); navigate('/login'); }}
-                                sx={{ bgcolor: secondaryMain, ml: 1, fontWeight: 'bold', borderRadius: 0, '&:hover': { bgcolor: '#e6951d' } }}>
-                            Exit
-                        </Button>
-                    </Stack>
+                    {isMobile ? (
+                        <IconButton color="inherit" onClick={() => setDrawerOpen(true)}>
+                            <MenuIcon />
+                        </IconButton>
+                    ) : (
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                            <NavButtons />
+                        </Stack>
+                    )}
 
                     <Menu anchorEl={anchorEl} open={openMenu} onClose={() => setAnchorEl(null)} PaperProps={{ sx: { width: 260, mt: 1.5, boxShadow: 5 } }}>
                         <MenuItem onClick={() => setAnchorEl(null)}>Admin Profile</MenuItem>
@@ -175,8 +192,21 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                     </Menu>
                 </Box>
 
+                {/* MOBILE DRAWER */}
+                <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+                    <Box sx={{ width: 260, p: 2 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                            <Typography fontWeight="bold" color={primaryMain}>MENU</Typography>
+                            <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
+                        </Stack>
+                        <Stack spacing={1}>
+                            <NavButtons />
+                        </Stack>
+                    </Box>
+                </Drawer>
+
                 {/* CONTENT */}
-                <Box sx={{ p: 4 }}>
+                <Box sx={{ p: { xs: 2, md: 4 } }}>
                     <Stack direction={{ xs: 'column', lg: 'row' }} spacing={4} alignItems="flex-start">
 
                         {/* Sidebar */}
@@ -184,15 +214,17 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                             <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                                 <StatsIcon sx={{ mr: 1, verticalAlign: 'middle', color: primaryMain }} />System Pulse
                             </Typography>
-                            <Stack spacing={2} sx={{ mb: 4 }}>
+                            <Stack direction={{ xs: 'row', sm: 'row', lg: 'column' }} spacing={2} sx={{ mb: 4, flexWrap: 'wrap' }}>
                                 {[
                                     { label: 'Total Incidents', value: String(logs.length), color: primaryMain },
-                                    { label: 'Critical', value: String(logs.filter(l => l.severity === 'critical' || l.severity === 'high').length), color: '#d32f2f' },
-                                    { label: 'Security Threats', value: '0', color: '#27ae60' }
+                                    { label: 'Critical / High', value: String(logs.filter(l => l.severity === 'critical' || l.severity === 'high').length), color: '#d32f2f' },
+                                    { label: 'Resolved', value: String((logs as any[]).filter((l: any) => l.status === 'resolved').length), color: '#27ae60' },
+                                    { label: 'Closed', value: String((logs as any[]).filter((l: any) => l.status === 'closed').length), color: '#4527a0' },
+                                    { label: 'In Progress', value: String((logs as any[]).filter((l: any) => ['new','investigating','monitoring','identified'].includes(l.status)).length), color: '#f57f17' },
                                 ].map((item, idx) => (
-                                    <Paper key={idx} sx={{ p: 2, borderRadius: 1, borderLeft: `6px solid ${item.color}`, boxShadow: 2, bgcolor: 'rgba(255,255,255,0.9)' }}>
+                                    <Paper key={idx} sx={{ p: 2, flex: { xs: '1 1 calc(50% - 8px)', lg: 'unset' }, borderRadius: 1, borderLeft: `6px solid ${item.color}`, boxShadow: 2, bgcolor: 'rgba(255,255,255,0.9)' }}>
                                         <Typography variant="caption" color="text.secondary">{item.label}</Typography>
-                                        <Typography variant="h4" sx={{ fontWeight: 900, color: item.color }}>{item.value}</Typography>
+                                        <Typography variant={isSmall ? 'h5' : 'h4'} sx={{ fontWeight: 900, color: item.color }}>{item.value}</Typography>
                                     </Paper>
                                 ))}
                             </Stack>
@@ -223,19 +255,19 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                         </Box>
 
                         {/* Table */}
-                        <Box sx={{ flexGrow: 1, width: '100%' }}>
+                        <Box sx={{ flexGrow: 1, width: '100%', minWidth: 0 }}>
                             <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                                 <SecurityIcon sx={{ mr: 1, verticalAlign: 'middle', color: primaryMain }} />Incident Activity Log
                             </Typography>
-                            <TableContainer component={Paper} sx={{ borderRadius: 0, boxShadow: 3, border: `2px solid ${primaryMain}`, bgcolor: 'rgba(255,255,255,0.95)' }}>
-                                <Table stickyHeader size="small">
+                            <TableContainer component={Paper} sx={{ borderRadius: 0, boxShadow: 3, border: `2px solid ${primaryMain}`, bgcolor: 'rgba(255,255,255,0.95)', overflowX: 'auto' }}>
+                                <Table stickyHeader size="small" sx={{ minWidth: { xs: 500, md: 'auto' } }}>
                                     <TableHead>
                                         <TableRow>
-                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900 }}>TIME</TableCell>
-                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900 }}>INCIDENT #</TableCell>
-                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900 }}>TITLE</TableCell>
-                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900 }}>SEVERITY</TableCell>
-                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, textAlign: 'center' }}>ACTIONS</TableCell>
+                                            {!isSmall && <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, fontSize: '1rem' }}>TIME</TableCell>}
+                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, fontSize: '1rem' }}>INCIDENT #</TableCell>
+                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, fontSize: '1rem' }}>TITLE</TableCell>
+                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, fontSize: '1rem' }}>SEVERITY</TableCell>
+                                            <TableCell sx={{ bgcolor: primaryMain, color: 'white', fontWeight: 900, textAlign: 'center', fontSize: '1rem' }}>ACTIONS</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -245,14 +277,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                                             </TableRow>
                                         ) : logs.map((log) => (
                                             <TableRow key={log._id} hover onClick={() => handleRowClick(log)} sx={{ cursor: 'pointer' }}>
-                                                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                                                    {new Date(log.createdAt).toLocaleString()}
-                                                </TableCell>
-                                                <TableCell sx={{ fontWeight: 'bold', color: primaryMain }}>{log.incidentNumber || 'N/A'}</TableCell>
-                                                <TableCell sx={{ fontWeight: 500 }}>{log.title}</TableCell>
+                                                {!isSmall && <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>{new Date(log.createdAt).toLocaleString()}</TableCell>}
+                                                <TableCell sx={{ fontWeight: 'bold', color: primaryMain, fontSize: '1rem' }}>{log.incidentNumber || 'N/A'}</TableCell>
+                                                <TableCell sx={{ fontWeight: 500, fontSize: '1rem' }}>{log.title}</TableCell>
                                                 <TableCell>
                                                     <Chip label={log.severity?.toUpperCase()} size="small" sx={{
-                                                        borderRadius: 0, fontWeight: 'bold',
+                                                        borderRadius: 0, fontWeight: 'bold', fontSize: '0.8rem',
                                                         bgcolor: (log.severity === 'high' || log.severity === 'critical') ? '#fdecea' : '#e3f2fd',
                                                         color: (log.severity === 'high' || log.severity === 'critical') ? '#d32f2f' : primaryMain
                                                     }} />

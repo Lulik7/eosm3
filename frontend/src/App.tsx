@@ -1,115 +1,94 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import api from './api/axios'
-import LoginPage from './pages/loginPage'
-import SupportPage from './pages/supportsPage'
-import EngineerPage from './pages/engineersPage'
-import AdminPage from './pages/adminsPage'
-import UserPage from "./pages/usersPage";
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { CircularProgress, Box } from '@mui/material';
+
+import { AppThemeProvider } from './context/ThemeContext';
+import AccessibilityPanel from './components/AccessibilityPanel';
+
+import LoginPage from './pages/loginPage';
+import UserPage from './pages/usersPage';
+import SupportPage from './pages/supportsPage';
+import EngineerPage from './pages/engineersPage';
+import AdminPage from './pages/adminsPage';
+
+import api from './api/axios';
 
 interface User {
-    _id: string
-    username: string
-    role: 'user' | 'support' | 'engineer' | 'admin'
+    _id: string;
+    username: string;
+    email: string;
+    role: 'user' | 'support' | 'engineer' | 'admin';
 }
 
-const RoleRedirect = ({ user }: { user: User }) => {
-    switch (user.role) {
-        case 'user':      return <Navigate to="/user" />
-        case 'support':   return <Navigate to="/support" />
-        case 'engineer':  return <Navigate to="/engineer" />
-        case 'admin':     return <Navigate to="/admin" />
-        default:          return <Navigate to="/login" />
-    }
-}
+const App: React.FC = () => {
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
 
-function App() {
-    const [user, setUser] = useState<User | null>(null)
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        const checkSession = async () => {
-            try {
-                const res = await api.get('/auth/me')
-                const userData = res.data?.data?.user || res.data?.user || res.data
-                setUser(userData)
-            } catch (error) {
-                console.log('Session not found or expired')
-                setUser(null)
-            }
-            setLoading(false)
-        }
-        checkSession()
-    }, [])
-
-    const onLoginSuccess = async () => {
+    const fetchCurrentUser = async () => {
         try {
-            const res = await api.get('/auth/me')
-            const userData = res.data?.data?.user || res.data?.user || res.data
-            setUser(userData)
-        } catch (error) {
-            console.error('Failed to fetch user after login:', error)
+            const res = await api.get('/auth/me');
+            const userData = res.data?.data?.user || res.data?.user || res.data;
+            setUser(userData);
+        } catch {
+            setUser(null);
+        } finally {
+            setLoading(false);
         }
-    }
+    };
+
+    useEffect(() => { fetchCurrentUser(); }, []);
 
     const logout = async () => {
-        try {
-            await api.post('/auth/logout')
-        } catch (error) {
-            console.error('Logout error:', error)
-        } finally {
-            setUser(null)
-        }
-    }
+        try { await api.post('/auth/logout'); } catch {}
+        setUser(null);
+    };
 
-    if (loading) return <div style={{ padding: 40 }}>Loading...</div>
+    if (loading) return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <CircularProgress sx={{ color: '#2b4d7e' }} />
+        </Box>
+    );
 
-    // Проверка: залогинен ли пользователь (любая роль)
-    const isAuth = Boolean(user)
-    // Проверка: admin может заходить на все страницы
-    const isAdmin = user?.role === 'admin'
+    const isAdmin = user?.role === 'admin';
 
     return (
-        <BrowserRouter>
-            <Routes>
+        <AppThemeProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={
+                        user ? <Navigate to={`/${user.role}`} replace /> : <LoginPage onLoginSuccess={fetchCurrentUser} />
+                    } />
 
-                <Route path="/login" element={
-                    user ? <RoleRedirect user={user} /> : <LoginPage onLoginSuccess={onLoginSuccess} />
-                } />
+                    <Route path="/user" element={
+                        user ? <UserPage logout={logout} /> : <Navigate to="/login" replace />
+                    } />
 
-                <Route path="/" element={
-                    user ? <RoleRedirect user={user} /> : <Navigate to="/login" />
-                } />
+                    <Route path="/support" element={
+                        user?.role === 'support' || isAdmin
+                            ? <SupportPage logout={logout} />
+                            : <Navigate to="/login" replace />
+                    } />
 
-                <Route path="/user" element={
-                    user?.role === 'user' || isAdmin
-                        ? <UserPage logout={logout} />
-                        : <Navigate to="/login" />
-                } />
+                    <Route path="/engineer" element={
+                        user?.role === 'engineer' || isAdmin
+                            ? <EngineerPage logout={logout} />
+                            : <Navigate to="/login" replace />
+                    } />
 
-                <Route path="/support" element={
-                    user?.role === 'support' || isAdmin
-                        ? <SupportPage logout={logout} />
-                        : <Navigate to="/login" />
-                } />
+                    <Route path="/admin" element={
+                        isAdmin ? <AdminPage logout={logout} /> : <Navigate to="/login" replace />
+                    } />
 
-                <Route path="/engineer" element={
-                    user?.role === 'engineer' || isAdmin
-                        ? <EngineerPage logout={logout} />
-                        : <Navigate to="/login" />
-                } />
+                    <Route path="*" element={
+                        <Navigate to={user ? `/${user.role}` : '/login'} replace />
+                    } />
+                </Routes>
 
-                <Route path="/admin" element={
-                    user?.role === 'admin'
-                        ? <AdminPage logout={logout} />
-                        : <Navigate to="/login" />
-                } />
+                {/* Floating accessibility panel — visible on all pages */}
+                <AccessibilityPanel />
+            </BrowserRouter>
+        </AppThemeProvider>
+    );
+};
 
-                <Route path="*" element={<Navigate to="/login" />} />
-
-            </Routes>
-        </BrowserRouter>
-    )
-}
-
-export default App
+export default App;
