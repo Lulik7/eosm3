@@ -13,6 +13,7 @@ Built with React + TypeScript (frontend) and Node.js + Express + MongoDB (backen
 - **Incident Management**: Automated incident number generation, severity levels, status history, work log
 - **Engineer Terminal**: Full incident view, status updates, notes/remarks journal
 - **Admin Dashboard**: System overview, incident log, cross-page navigation
+- **Internal Messaging**: Real-time inbox system between Admin, Support, and Engineer roles
 
 ---
 
@@ -91,8 +92,8 @@ Without a code → registered as a regular `user`.
 eosm3-main/
 ├── backend/
 │   └── src/
-│       ├── controllers/       # Business logic (auth, tickets, incidents)
-│       ├── models/            # Mongoose models (User, Ticket, Incident)
+│       ├── controllers/       # Business logic (auth, tickets, incidents, messages)
+│       ├── models/            # Mongoose models (User, Ticket, Incident, Message)
 │       ├── routes/            # Express routes
 │       ├── middleware/        # Authentication, role guards
 │       ├── validators/        # Request validation schemas
@@ -148,6 +149,69 @@ PUT    /api/incidents/:id          Full update (support)
 DELETE /api/incidents/:id          Delete (admin only)
 ```
 
+### Messages
+```
+POST   /api/messages               Send a message to a role (admin, support, or engineer)
+GET    /api/messages/inbox         Get all messages addressed to the current user's role
+GET    /api/messages/unread        Get unread message count for the current user's role
+PATCH  /api/messages/:id/read      Mark a message as read
+```
+
+> All message endpoints require authentication. Messages are role-addressed — each role sees only messages sent `to` their role.
+
+---
+
+## 💬 Internal Messaging System
+
+Staff roles (Admin, Support, Engineer) can send and receive messages through a built-in inbox.
+
+### How it works
+
+- Messages are stored in MongoDB in the `messages` collection (auto-created on first send)
+- Each message has: `from` (sender role), `fromUsername`, `to` (target role), `text`, `read`, `createdAt`
+- The inbox badge updates every **30 seconds** via polling
+- Opening the inbox marks all messages as read automatically
+
+### Who can message whom
+
+| Sender | Can send to |
+|--------|-------------|
+| Admin | Support, Engineer |
+| Engineer | Support, Admin |
+| Support | Admin |
+
+### New backend files to add
+
+Copy these files into the project before rebuilding Docker:
+
+```
+backend/src/models/Message.ts              ← Mongoose model
+backend/src/controllers/messageController.ts  ← send, inbox, markRead, unreadCount
+backend/src/routes/messages.ts             ← route definitions
+```
+
+Also replace `backend/src/app.ts` — it now imports and registers the messages route:
+```typescript
+import messageRoutes from './routes/messages';
+app.use('/api/messages', messageRoutes);
+```
+
+### Rebuild after adding files
+
+```powershell
+docker-compose build backend
+docker-compose up -d
+```
+
+> MongoDB will automatically create the `messages` collection on the first message sent — no manual setup required.
+
+### Frontend inbox (all 3 role pages)
+
+Each role page has an **Inbox** button with an unread badge:
+- **Admin** — inbox button in the header toolbar + send form in the messenger panel
+- **Support** — inbox button in header (desktop) / drawer (mobile) + reply field inside the inbox dialog
+- **Engineer** — inbox button between Admin and EXIT buttons (desktop) / drawer (mobile)
+
 ---
 
 ## 🗄 Database — Manual Role Change
@@ -185,7 +249,6 @@ db.users.updateOne({ email: "user@example.com" }, { $set: { role: "support" } })
 `low` · `medium` · `high` · `critical`
 
 ---
-
 ---
 ---
 
@@ -204,6 +267,7 @@ Frontend: React + TypeScript + MUI. Backend: Node.js + Express + MongoDB. Деп
 - **Управление инцидентами**: автогенерация номеров, приоритеты, история статусов, журнал работ
 - **Терминал инженера**: полный просмотр инцидентов, смена статуса, добавление замечаний
 - **Панель администратора**: обзор системы, лог инцидентов, переход на все страницы
+- **Внутренние сообщения**: система входящих сообщений между ролями Admin, Support и Engineer
 
 ---
 
@@ -282,8 +346,8 @@ npm run dev
 eosm3-main/
 ├── backend/
 │   └── src/
-│       ├── controllers/       # Бизнес-логика (auth, tickets, incidents)
-│       ├── models/            # Mongoose модели (User, Ticket, Incident)
+│       ├── controllers/       # Бизнес-логика (auth, tickets, incidents, messages)
+│       ├── models/            # Mongoose модели (User, Ticket, Incident, Message)
 │       ├── routes/            # Express маршруты
 │       ├── middleware/        # Аутентификация, проверка ролей
 │       ├── validators/        # Схемы валидации запросов
@@ -338,6 +402,67 @@ POST   /api/incidents/:id/updates  Добавить замечание (support 
 PUT    /api/incidents/:id          Полное обновление (support)
 DELETE /api/incidents/:id          Удалить (только admin)
 ```
+
+### Сообщения
+```
+POST   /api/messages               Отправить сообщение роли (admin, support или engineer)
+GET    /api/messages/inbox         Получить все сообщения для текущей роли пользователя
+GET    /api/messages/unread        Получить количество непрочитанных сообщений
+PATCH  /api/messages/:id/read      Пометить сообщение как прочитанное
+```
+
+> Все эндпоинты сообщений требуют аутентификации. Сообщения адресованы роли — каждая роль видит только сообщения, отправленные на её роль.
+
+---
+
+## 💬 Система внутренних сообщений
+
+Роли сотрудников (Admin, Support, Engineer) могут отправлять и получать сообщения через встроенный inbox.
+
+### Как это работает
+
+- Сообщения хранятся в MongoDB в коллекции `messages` (создаётся автоматически при первой отправке)
+- Каждое сообщение содержит: `from` (роль отправителя), `fromUsername`, `to` (целевая роль), `text`, `read`, `createdAt`
+- Счётчик непрочитанных обновляется каждые **30 секунд** через polling
+- При открытии inbox все сообщения автоматически помечаются как прочитанные
+
+### Кто кому может писать
+
+| Отправитель | Может написать |
+|-------------|---------------|
+| Admin | Support, Engineer |
+| Engineer | Support, Admin |
+| Support | Admin |
+
+### Новые файлы бэкенда — нужно скопировать в проект
+
+```
+backend/src/models/Message.ts                  ← Mongoose модель
+backend/src/controllers/messageController.ts   ← send, inbox, markRead, unreadCount
+backend/src/routes/messages.ts                 ← описание роутов
+```
+
+Также заменить `backend/src/app.ts` — он теперь импортирует и регистрирует роут сообщений:
+```typescript
+import messageRoutes from './routes/messages';
+app.use('/api/messages', messageRoutes);
+```
+
+### Пересборка после добавления файлов
+
+```powershell
+docker-compose build backend
+docker-compose up -d
+```
+
+> MongoDB автоматически создаст коллекцию `messages` при первой отправке сообщения — никакой ручной настройки не требуется.
+
+### Inbox на фронтенде (все 3 страницы ролей)
+
+На каждой странице роли есть кнопка **Inbox** со счётчиком непрочитанных:
+- **Admin** — кнопка inbox в верхней панели + форма отправки в панели мессенджера
+- **Support** — кнопка inbox в хедере (десктоп) / drawer (мобайл) + поле ответа внутри диалога inbox
+- **Engineer** — кнопка inbox между кнопками Admin и EXIT (десктоп) / drawer (мобайл)
 
 ---
 

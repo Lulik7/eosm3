@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Typography, Paper, Stack,
     Button, IconButton, TextField, Chip,
     Dialog, DialogTitle, DialogContent, DialogActions,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Alert, Snackbar, MenuItem, CircularProgress,
+    Alert, Snackbar, MenuItem, CircularProgress, Badge, List, ListItem, ListItemText,
     Select, Divider, Avatar, Drawer, useMediaQuery, useTheme
 } from '@mui/material';
 import {
@@ -15,7 +15,9 @@ import {
     Send as SendIcon,
     Info as InfoIcon,
     Menu as MenuIcon,
-    Close as CloseIcon
+    Close as CloseIcon,
+    MoveToInbox as InboxIcon,
+    Chat as ChatIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -71,6 +73,67 @@ const getSeverityColor = (severity: string) => {
     }
 };
 
+const getAuthorName = (author: any): string => {
+    if (!author) return 'Unknown';
+    if (typeof author === 'object') return author.username || author.email || 'Unknown';
+    return String(author);
+};
+
+
+// ── Standalone dialogs — own local state so typing doesn't re-render parent ──
+
+interface SendMsgDialogProps {
+    open: boolean;
+    onClose: () => void;
+    onSent: (msg: string) => void;
+    title: string;
+    titleBg: string;
+    to: string;
+}
+
+const SendMsgDialog: React.FC<SendMsgDialogProps> = ({ open, onClose, onSent, title, titleBg, to }) => {
+    const [text, setText] = React.useState('');
+    const handleClose = () => { setText(''); onClose(); };
+    const handleSend = async () => {
+        const txt = text.trim();
+        if (!txt) return;
+        try {
+            await axios.post('http://localhost:3000/api/messages', { to, text: txt }, { withCredentials: true });
+            onSent(`Message sent to ${title}!`);
+            setText('');
+            onClose();
+        } catch (err: any) {
+            onSent('Failed to send — ' + (err?.response?.data?.message || err?.message || 'error'));
+        }
+    };
+    return (
+        <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
+            <DialogTitle sx={{ bgcolor: titleBg, color: 'white', fontWeight: 900 }}>{title.toUpperCase()}</DialogTitle>
+            <DialogContent>
+                <Box sx={{ pt: 1.5 }}>
+                    <textarea
+                        rows={5}
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Type your message here..."
+                        style={{
+                            width: '100%', boxSizing: 'border-box',
+                            padding: '10px', fontSize: '1rem',
+                            border: '1px solid #ccc', borderRadius: 0,
+                            resize: 'vertical', fontFamily: 'inherit', outline: 'none'
+                        }}
+                    />
+                </Box>
+            </DialogContent>
+            <DialogActions sx={{ p: 2, bgcolor: '#f4f7f9' }}>
+                <Button onClick={handleClose} sx={{ fontWeight: 'bold' }}>CANCEL</Button>
+                <Button variant="contained" onClick={handleSend}
+                        sx={{ bgcolor: titleBg, borderRadius: 0, fontWeight: 'bold', px: 3 }}>SEND</Button>
+            </DialogActions>
+        </Dialog>
+    );
+};
+
 const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
     const navigate = useNavigate();
     const theme = useTheme();
@@ -81,6 +144,10 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [tasks, setTasks] = useState<EngineerTask[]>([]);
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [inboxOpen, setInboxOpen] = useState(false);
+    const [inbox, setInbox] = useState<any[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [replyText, setReplyText] = useState('');
 
     const [openDetails, setOpenDetails] = useState(false);
     const [selectedTask, setSelectedTask] = useState<EngineerTask | null>(null);
@@ -89,8 +156,7 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
 
     const [openSupportDialog, setOpenSupportDialog] = useState(false);
     const [openAdminDialog, setOpenAdminDialog] = useState(false);
-    const [supportMsg, setSupportMsg] = useState('');
-    const [adminMsg, setAdminMsg] = useState('');
+
 
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
@@ -113,6 +179,39 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
     };
 
     useEffect(() => { fetchTasks(); }, []);
+
+    // ── Messenger — useCallback prevents re-creation on every render ──
+    const fetchMessages = useCallback(async () => {
+        try {
+            const res = await axios.get('http://localhost:3000/api/messages/inbox', { withCredentials: true });
+            const msgs = Array.isArray(res.data) ? res.data : [];
+            setInbox(msgs);
+            setUnreadCount(msgs.filter((m: any) => !m.read).length);
+        } catch { /* silent */ }
+    }, []);
+
+    const handleOpenInbox = useCallback(async () => {
+        try {
+            const res = await axios.get('http://localhost:3000/api/messages/inbox', { withCredentials: true });
+            const msgs = Array.isArray(res.data) ? res.data : [];
+            // mark all as read
+            msgs.forEach(async (m: any) => {
+                if (!m.read) {
+                    try { await axios.patch(`http://localhost:3000/api/messages/${m._id}/read`, {}, { withCredentials: true }); } catch {}
+                }
+            });
+            setInbox(msgs.map((m: any) => ({ ...m, read: true })));
+            setUnreadCount(0);
+        } catch { /* silent */ }
+        setInboxOpen(true);
+    }, []);
+
+    // Poll every 60s — stable ref so no re-render side effects
+    useEffect(() => {
+        fetchMessages();
+        const t = setInterval(fetchMessages, 60000);
+        return () => clearInterval(t);
+    }, [fetchMessages]);
 
     const openIncidentDetails = async (task: EngineerTask) => {
         try {
@@ -155,17 +254,19 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
         } catch { showMessage('Failed to delete incident', 'error'); }
     };
 
-    const filteredTasks = tasks.filter(task =>
-        (task.location ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.incidentNumber ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (task.title ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
 
-    const getAuthorName = (author: any) => {
-        if (!author) return 'Unknown';
-        if (typeof author === 'object') return author.username || author.email || 'Unknown';
-        return author;
-    };
+
+
+
+    const filteredTasks = React.useMemo(() =>
+            tasks.filter(task =>
+                (task.location ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (task.incidentNumber ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (task.title ?? '').toLowerCase().includes(searchTerm.toLowerCase())
+            ),
+        [tasks, searchTerm]);
+
+
 
     return (
         <Box sx={{ bgcolor: '#fafafa', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -197,6 +298,9 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
                     <Stack direction="row" spacing={1}>
                         <Button variant="contained" startIcon={<SupportIcon />} onClick={() => setOpenSupportDialog(true)} sx={{ bgcolor: '#2b4d7e', borderRadius: 0 }}>Support</Button>
                         <Button variant="contained" startIcon={<AdminIcon />} onClick={() => setOpenAdminDialog(true)} sx={{ bgcolor: '#d32f2f', borderRadius: 0 }}>Admin</Button>
+                        <IconButton onClick={handleOpenInbox} sx={{ color: '#e67e22', border: '1px solid #e67e22' }}>
+                            <Badge badgeContent={unreadCount} color="error"><InboxIcon /></Badge>
+                        </IconButton>
                         <Button variant="contained" onClick={async () => { await logout(); navigate('/login'); }} sx={{ bgcolor: '#444', borderRadius: 0 }}>EXIT</Button>
                     </Stack>
                 )}
@@ -222,6 +326,11 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
                     <Stack spacing={1}>
                         <Button variant="contained" startIcon={<SupportIcon />} fullWidth onClick={() => { setOpenSupportDialog(true); setDrawerOpen(false); }} sx={{ bgcolor: '#2b4d7e', borderRadius: 0 }}>Contact Support</Button>
                         <Button variant="contained" startIcon={<AdminIcon />} fullWidth onClick={() => { setOpenAdminDialog(true); setDrawerOpen(false); }} sx={{ bgcolor: '#d32f2f', borderRadius: 0 }}>Admin Report</Button>
+                        <Button fullWidth onClick={() => { handleOpenInbox(); setDrawerOpen(false); }}
+                                startIcon={<Badge badgeContent={unreadCount} color="error"><InboxIcon /></Badge>}
+                                sx={{ justifyContent: 'flex-start', color: '#e67e22', border: '1px solid #e67e22', borderRadius: 0, py: 1 }}>
+                            Inbox {unreadCount > 0 ? `(${unreadCount})` : ''}
+                        </Button>
                         <Button variant="contained" fullWidth onClick={async () => { await logout(); navigate('/login'); }} sx={{ bgcolor: '#444', borderRadius: 0 }}>EXIT</Button>
                     </Stack>
                 </Box>
@@ -407,27 +516,66 @@ const EngineerPage: React.FC<EngineerPageProps> = ({ logout }) => {
             </Dialog>
 
             {/* Contact Support Dialog */}
-            <Dialog open={openSupportDialog} onClose={() => setOpenSupportDialog(false)} fullWidth maxWidth="xs">
-                <DialogTitle sx={{ bgcolor: '#2b4d7e', color: 'white' }}>CONTACT SUPPORT</DialogTitle>
-                <DialogContent sx={{ mt: 2 }}>
-                    <TextField fullWidth multiline rows={3} label="Message" value={supportMsg} onChange={(e) => setSupportMsg(e.target.value)} />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenSupportDialog(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={() => { setOpenSupportDialog(false); setSupportMsg(''); showMessage('Message sent to Support'); }} sx={{ bgcolor: '#2b4d7e' }}>Send</Button>
-                </DialogActions>
-            </Dialog>
+            <SendMsgDialog
+                open={openSupportDialog}
+                onClose={() => setOpenSupportDialog(false)}
+                onSent={(msg) => showMessage(msg)}
+                title="Contact Support"
+                titleBg="#2b4d7e"
+                to="support"
+            />
 
             {/* Admin Report Dialog */}
-            <Dialog open={openAdminDialog} onClose={() => setOpenAdminDialog(false)} fullWidth maxWidth="xs">
-                <DialogTitle sx={{ bgcolor: '#d32f2f', color: 'white' }}>ADMIN REPORT</DialogTitle>
-                <DialogContent sx={{ mt: 2 }}>
-                    <TextField fullWidth multiline rows={3} label="Details" value={adminMsg} onChange={(e) => setAdminMsg(e.target.value)} />
+            <SendMsgDialog
+                open={openAdminDialog}
+                onClose={() => setOpenAdminDialog(false)}
+                onSent={(msg) => showMessage(msg)}
+                title="Admin Report"
+                titleBg="#d32f2f"
+                to="admin"
+            />
+
+            {/* Inbox Dialog */}
+            <Dialog open={inboxOpen} onClose={() => setInboxOpen(false)} fullWidth maxWidth="xs" fullScreen={isSmall}>
+                <DialogTitle sx={{ bgcolor: '#1a2a40', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                        <ChatIcon />
+                        <Typography fontWeight={900}>Incoming Messages</Typography>
+                    </Stack>
+                    <IconButton size="small" onClick={() => setInboxOpen(false)} sx={{ color: 'white' }}><CloseIcon /></IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                    <List>
+                        {inbox.length === 0 ? (
+                            <ListItem><ListItemText primary="No messages" secondary="Your inbox is empty" /></ListItem>
+                        ) : inbox.map((msg: any, i: number) => (
+                            <React.Fragment key={msg._id}>
+                                {i > 0 && <Divider />}
+                                <ListItem alignItems="flex-start" sx={{ bgcolor: msg.read ? 'transparent' : 'rgba(230,126,34,0.05)' }}>
+                                    <ListItemText
+                                        primary={
+                                            <Stack direction="row" justifyContent="space-between">
+                                                <Typography fontWeight={msg.read ? 400 : 700} sx={{ color: '#e67e22', textTransform: 'capitalize' }}>
+                                                    From: {msg.fromUsername} ({msg.from})
+                                                </Typography>
+                                                {!msg.read && <Chip label="NEW" size="small" sx={{ bgcolor: '#e67e22', color: 'white', fontSize: '0.6rem', height: 18 }} />}
+                                            </Stack>
+                                        }
+                                        secondary={
+                                            <>
+                                                <Typography variant="body2" sx={{ mt: 0.5 }}>{msg.text}</Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                    {new Date(msg.createdAt).toLocaleString()}
+                                                </Typography>
+                                            </>
+                                        }
+                                    />
+                                </ListItem>
+                            </React.Fragment>
+                        ))}
+                    </List>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenAdminDialog(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={() => { setOpenAdminDialog(false); setAdminMsg(''); showMessage('Report sent to Admin'); }} sx={{ bgcolor: '#d32f2f' }}>Send</Button>
-                </DialogActions>
+                <DialogActions><Button onClick={() => setInboxOpen(false)}>Close</Button></DialogActions>
             </Dialog>
 
             <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>

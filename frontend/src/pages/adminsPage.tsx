@@ -65,6 +65,8 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const openMenu = Boolean(anchorEl);
+    const [inbox, setInbox] = useState<any[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const primaryMain = '#2b4d7e';
     const secondaryMain = '#f5a623';
@@ -89,7 +91,37 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
         }
     };
 
-    useEffect(() => { fetchTasks(); }, []);
+    const fetchMessages = async () => {
+        try {
+            const res = await axios.get('http://localhost:3000/api/messages/inbox', { withCredentials: true });
+            const msgs = Array.isArray(res.data) ? res.data : [];
+            setInbox(msgs);
+            setUnreadCount(msgs.filter((m: any) => !m.read).length);
+        } catch { /* silent */ }
+    };
+
+    const handleSendMessage = async () => {
+        if (!recipient || !message.trim()) return;
+        try {
+            await axios.post('http://localhost:3000/api/messages', { to: recipient, text: message }, { withCredentials: true });
+            showMessage(`Message sent to ${recipient}!`);
+            setMessage('');
+        } catch { showMessage('Failed to send message', 'error'); }
+    };
+
+    const handleOpenInbox = async () => {
+        await fetchMessages();
+        // mark all as read
+        inbox.forEach(async (m: any) => {
+            if (!m.read) {
+                try { await axios.patch(`http://localhost:3000/api/messages/${m._id}/read`, {}, { withCredentials: true }); } catch {}
+            }
+        });
+        setUnreadCount(0);
+        setIsInboxOpen(true);
+    };
+
+    useEffect(() => { fetchTasks(); fetchMessages(); }, []);
 
     const showMessage = (msg: string, sev: 'success' | 'error' = 'success') =>
         setSnackbar({ open: true, message: msg, severity: sev });
@@ -244,10 +276,10 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                                     <TextField fullWidth multiline rows={2} placeholder="Message..." size="small" value={message} onChange={(e) => setMessage(e.target.value)} />
                                     <Stack direction="row" spacing={1}>
                                         <Button fullWidth variant="contained" startIcon={<SendIcon />}
-                                                onClick={() => { showMessage('Message sent!'); setMessage(''); }}
+                                                onClick={handleSendMessage}
                                                 sx={{ bgcolor: primaryMain, borderRadius: 0 }}>Send</Button>
-                                        <Button variant="outlined" sx={{ borderColor: primaryMain, color: primaryMain, borderRadius: 0 }} onClick={() => setIsInboxOpen(true)}>
-                                            <Badge badgeContent={4} color="error"><InboxIcon /></Badge>
+                                        <Button variant="outlined" sx={{ borderColor: primaryMain, color: primaryMain, borderRadius: 0 }} onClick={handleOpenInbox}>
+                                            <Badge badgeContent={unreadCount || 0} color="error"><InboxIcon /></Badge>
                                         </Button>
                                     </Stack>
                                 </Stack>
@@ -325,9 +357,33 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
                     <DialogTitle sx={{ bgcolor: primaryMain, color: 'white' }}>Incoming Messages</DialogTitle>
                     <DialogContent dividers>
                         <List>
-                            <ListItem><ListItemText primary="Engineer" secondary="Backup online." /></ListItem>
-                            <Divider />
-                            <ListItem><ListItemText primary="Support" secondary="User reset." /></ListItem>
+                            {inbox.length === 0 ? (
+                                <ListItem><ListItemText primary="No messages" secondary="Your inbox is empty" /></ListItem>
+                            ) : inbox.map((msg: any, i: number) => (
+                                <React.Fragment key={msg._id}>
+                                    {i > 0 && <Divider />}
+                                    <ListItem alignItems="flex-start" sx={{ bgcolor: msg.read ? 'transparent' : 'rgba(43,77,126,0.05)' }}>
+                                        <ListItemText
+                                            primary={
+                                                <Stack direction="row" justifyContent="space-between">
+                                                    <Typography fontWeight={msg.read ? 400 : 700} sx={{ color: '#2b4d7e', textTransform: 'capitalize' }}>
+                                                        From: {msg.fromUsername} ({msg.from})
+                                                    </Typography>
+                                                    {!msg.read && <Chip label="NEW" size="small" sx={{ bgcolor: '#2b4d7e', color: 'white', fontSize: '0.6rem', height: 18 }} />}
+                                                </Stack>
+                                            }
+                                            secondary={
+                                                <>
+                                                    <Typography variant="body2" sx={{ mt: 0.5 }}>{msg.text}</Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {new Date(msg.createdAt).toLocaleString()}
+                                                    </Typography>
+                                                </>
+                                            }
+                                        />
+                                    </ListItem>
+                                </React.Fragment>
+                            ))}
                         </List>
                     </DialogContent>
                     <DialogActions><Button onClick={() => setIsInboxOpen(false)}>Close</Button></DialogActions>
