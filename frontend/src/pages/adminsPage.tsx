@@ -38,6 +38,8 @@ interface AdminPageProps {
     logout: () => Promise<void>;
 }
 
+const BASE_URL = 'https://eosm3-production-1bb1.up.railway.app';
+
 const steamAnimation = {
     '0%': { transform: 'translateY(0) scaleX(1)', opacity: 0 },
     '15%': { opacity: 0.9 },
@@ -79,7 +81,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
 
     const fetchTasks = async () => {
         try {
-            const response = await axios.get('http://localhost:3000/api/incidents?limit=100', { withCredentials: true });
+            const response = await axios.get(`${BASE_URL}/api/incidents?limit=100`, { withCredentials: true });
             const result = response.data;
             const arr = Array.isArray(result) ? result : result?.data || result?.incidents || [];
             setLogs(arr);
@@ -93,7 +95,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
 
     const fetchMessages = async () => {
         try {
-            const res = await axios.get('http://localhost:3000/api/messages/inbox', { withCredentials: true });
+            const res = await axios.get(`${BASE_URL}/api/messages/inbox`, { withCredentials: true });
             const msgs = Array.isArray(res.data) ? res.data : [];
             setInbox(msgs);
             setUnreadCount(msgs.filter((m: any) => !m.read).length);
@@ -103,7 +105,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
     const handleSendMessage = async () => {
         if (!recipient || !message.trim()) return;
         try {
-            await axios.post('https://eosm3-production-1bb1.up.railway.app', { to: recipient, text: message }, { withCredentials: true });
+            await axios.post(`${BASE_URL}/api/messages`, { to: recipient, text: message }, { withCredentials: true });
             showMessage(`Message sent to ${recipient}!`);
             setMessage('');
         } catch { showMessage('Failed to send message', 'error'); }
@@ -111,10 +113,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
 
     const handleOpenInbox = async () => {
         await fetchMessages();
-        // mark all as read
         inbox.forEach(async (m: any) => {
             if (!m.read) {
-                try { await axios.patch(`http://localhost:3000/api/messages/${m._id}/read`, {}, { withCredentials: true }); } catch {}
+                try { await axios.patch(`${BASE_URL}/api/messages/${m._id}/read`, {}, { withCredentials: true }); } catch {}
             }
         });
         setUnreadCount(0);
@@ -134,7 +135,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
     const handleSaveReport = async () => {
         if (!selectedLog) return;
         try {
-            await axios.patch(`http://localhost:3000/api/incidents/${selectedLog._id}`,
+            await axios.patch(`${BASE_URL}/api/incidents/${selectedLog._id}`,
                 { description: tempDetails }, { withCredentials: true });
             setLogs(prev => prev.map(l => l._id === selectedLog._id ? { ...l, description: tempDetails } : l));
             showMessage('Report updated!');
@@ -146,7 +147,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ logout }) => {
         e.stopPropagation();
         if (!window.confirm('Delete incident from database?')) return;
         try {
-            await axios.delete(`http://localhost:3000/api/incidents/${id}`, { withCredentials: true });
+            await axios.delete(`${BASE_URL}/api/incidents/${id}`, { withCredentials: true });
             setLogs(prev => prev.filter(l => l._id !== id));
             showMessage('Incident deleted', 'error');
         } catch { showMessage('Delete failed', 'error'); }
